@@ -1,0 +1,30 @@
+name: irc_adapter
+display_name: IRC协议适配器
+version: 1.1.1
+author: AstrBot Community
+description: |
+  用于 AstrBot 的 IRC 平台适配器，可通过 WebUI 直接配置 IRC 机器人连接。
+  当前插件为纯平台适配器，不提供插件级配置或聊天管理命令。
+  
+  特性：
+  - 支持通过 WebUI 配置多个 IRC 机器人实例
+  - 自动重连机制
+  - SSL/TLS加密连接
+  - 频道自动加入
+  - 频道昵称前缀唤醒
+  - 入站消息标准化为 AstrBotMessage / AstrMessageEvent
+  - 发送链兼容事件发送与 send_by_session 兜底
+  - 昵称冲突处理
+  - 停止机器人时主动退出频道并断开连接
+  - 异常断线后的连接状态清理与重连恢复
+  - 长消息自动分割
+  - 兼容部分 AstrBot 版本接口差异
+
+support_platforms:
+  - irc
+tags:
+  - irc
+  - adapter
+  - protocol
+  - chat
+license: MIT
