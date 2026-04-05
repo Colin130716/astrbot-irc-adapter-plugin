@@ -250,8 +250,12 @@ class IRCPlatformAdapter(Platform):
         try:
             if hasattr(connection, '_sock') and connection._sock:
                 connection._sock.close()
+                connection._sock = None
         except Exception:
             pass
+        
+        # 确保 reactor 停止
+        self._reactor_stop_event.set()
 
     def _bind_client_callbacks(self):
         self.client.on_privmsg = self._on_privmsg
