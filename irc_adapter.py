@@ -104,11 +104,22 @@ class IRCPlatformAdapter(Platform):
 
         await self._disconnect(expect_shutdown=True)
 
+        # 确保 reactor 线程退出
+        self._reactor_stop_event.set()
+
         if self._reactor_thread and self._reactor_thread.is_alive():
             self._reactor_thread.join(timeout=5)
 
         self._reactor_thread = None
         self.connection = None
+
+        # 清理 reactor
+        if hasattr(self, 'reactor') and self.reactor:
+            try:
+                self.reactor.close_all()
+            except Exception:
+                pass
+            self.reactor = None
 
     async def send_by_session(self, session: Any, message_chain: MessageChain):
         target = self._extract_session_target(session)
@@ -125,10 +136,7 @@ class IRCPlatformAdapter(Platform):
 
         self.send_message(target, message)
 
-        try:
-            await super().send_by_session(session, message_chain)
-        except Exception as exc:
-            logger.debug("IRC super().send_by_session 执行失败: %s", exc)
+
 
     async def _connect_forever(self):
         while self._running and not self._stopping:
@@ -237,6 +245,13 @@ class IRCPlatformAdapter(Platform):
                 connection.close()
             except Exception:
                 pass
+        
+        # 强制关闭 socket 以确保连接立即断开
+        try:
+            if hasattr(connection, '_sock') and connection._sock:
+                connection._sock.close()
+        except Exception:
+            pass
 
     def _bind_client_callbacks(self):
         self.client.on_privmsg = self._on_privmsg

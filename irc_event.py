@@ -44,7 +44,6 @@ class IRCEvent(AstrMessageEvent):
         for chunk in self._split_irc_messages(text):
             self.connection.privmsg(target, chunk)
 
-        await super().send(message)
 
     async def reply(self, message: str):
         target = self._get_target()
@@ -61,7 +60,6 @@ class IRCEvent(AstrMessageEvent):
         for chunk in self._split_irc_messages(message):
             self.connection.privmsg(target, chunk)
 
-        await super().send(cast(MessageChain, [Plain(text=message)]))
 
     def _get_target(self) -> Optional[str]:
         if not self.message_obj:
