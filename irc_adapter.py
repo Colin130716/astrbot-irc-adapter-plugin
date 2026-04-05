@@ -219,17 +219,20 @@ class IRCPlatformAdapter(Platform):
         connection = self.connection
         self.connection = None
         self._registered_channels.clear()
-        self._reactor_stop_event.set()
-
+        
         if not connection:
+            self._reactor_stop_event.set()
             return
-
+        
+        # 先设置停止事件，让 reactor 线程停止处理
+        self._reactor_stop_event.set()
+        
         try:
             if connection.connected:
                 if expect_shutdown:
                     for channel in self._get_config_channels():
                         try:
-                            logger.info("离开频道: %s", channel)
+                            logger.info("离开频道：%s", channel)
                             connection.part(channel, "AstrBot shutting down")
                             await asyncio.sleep(0.15)
                         except Exception as exc:
@@ -247,22 +250,26 @@ class IRCPlatformAdapter(Platform):
                     except Exception:
                         pass
         finally:
+            # 强制关闭 socket
+            try:
+                sock = getattr(connection, '_sock', None)
+                if sock is not None:
+                    try:
+                        sock.shutdown(2)  # SHUT_RDWR
+                    except Exception:
+                        pass
+                    sock.close()
+            except Exception:
+                pass
+            
+            # 调用 close 确保清理
             try:
                 connection.close()
             except Exception:
                 pass
         
-        # 强制关闭 socket 以确保连接立即断开
-        try:
-            sock = getattr(connection, '_sock', None)
-            if sock is not None:
-                sock.close()
-                # 不直接设置 _sock = None，因为这是内部属性，可能引起类型检查警告
-        except Exception:
-            pass
-        
-        # 确保 reactor 停止
-        self._reactor_stop_event.set()
+        # 等待一小段时间让 socket 完全关闭
+        await asyncio.sleep(0.5)
 
     def _bind_client_callbacks(self):
         self.client.on_privmsg = self._on_privmsg

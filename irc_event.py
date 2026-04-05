@@ -88,22 +88,33 @@ class IRCEvent(AstrMessageEvent):
         if isinstance(message, str):
             return self._normalize_irc_text(message)
 
-        # 首先尝试直接从常见属性获取文本（包括 Reply 组件的 text 属性）
-        for attr_name in ("message_str", "text", "content", "delta"):
+        # 首先尝试直接从常见属性获取文本（包括 Reply 组件的 text/message_str 属性）
+        # 这是最关键的一步，因为 AstrBot 的 Reply 组件通常将文本存储在 message_str 或 text 属性中
+        for attr_name in ("message_str", "text", "content"):
             value = getattr(message, attr_name, None)
             if isinstance(value, str) and value.strip():
+                logger.debug(f"_build_message_text: 直接从 {attr_name} 获取文本：%r", value[:50])
                 return self._normalize_irc_text(value)
 
         component_type = getattr(message, "type", None)
         if component_type is not None:
             type_name = getattr(component_type, "value", None) or getattr(component_type, "name", None) or str(component_type)
             if str(type_name).lower() == "reply":
+                # 对于 Reply 组件，优先尝试从 message_str/text 获取
+                for attr_name in ("message_str", "text", "content"):
+                    value = getattr(message, attr_name, None)
+                    if isinstance(value, str) and value.strip():
+                        logger.debug(f"_build_message_text: 从 Reply 组件的 {attr_name} 获取文本：%r", value[:50])
+                        return self._normalize_irc_text(value)
+                
+                # 如果还是没有，再尝试从 chain 获取嵌套内容
                 chained = getattr(message, "chain", None) or getattr(message, "message", None) or getattr(message, "messages", None)
-                nested = self._build_message_text(cast(Any, chained))
-                if nested:
-                    return nested
+                if chained is not None and chained is not message:
+                    nested = self._build_message_text(cast(Any, chained))
+                    if nested:
+                        return nested
 
-        # 再次尝试从其他属性获取文本
+        # 尝试从其他属性获取文本
         for attr_name in ("text", "content", "message", "delta"):
             value = getattr(message, attr_name, None)
             if isinstance(value, str) and value.strip():
@@ -134,10 +145,17 @@ class IRCEvent(AstrMessageEvent):
                 if component_type is not None:
                     type_name = getattr(component_type, "value", None) or getattr(component_type, "name", None) or str(component_type)
                     if str(type_name).lower() == "reply":
-                        nested = self._build_message_text(cast(Any, component))
-                        if nested:
-                            parts.append(nested)
-                            continue
+                        # 再次尝试从 Reply 组件直接获取文本
+                        for attr_name in ("message_str", "text", "content"):
+                            value = getattr(component, attr_name, None)
+                            if isinstance(value, str) and value.strip():
+                                parts.append(value)
+                                break
+                        else:
+                            nested = self._build_message_text(cast(Any, component))
+                            if nested:
+                                parts.append(nested)
+                                continue
 
                 text = getattr(component, "text", None)
                 if text:
@@ -145,7 +163,9 @@ class IRCEvent(AstrMessageEvent):
                 else:
                     parts.append(str(component))
 
-        return self._normalize_irc_text("".join(parts).strip())
+        result = self._normalize_irc_text("".join(parts).strip())
+        logger.debug("_build_message_text: 最终结果：%r", result[:50] if result else "")
+        return result
 
     def _iter_message_components(self, message: MessageChain):
         components = getattr(message, "chain", None)
