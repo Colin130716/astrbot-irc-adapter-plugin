@@ -116,7 +116,13 @@ class IRCPlatformAdapter(Platform):
         # 清理 reactor
         if hasattr(self, 'reactor') and self.reactor:
             try:
-                self.reactor.close_all()
+                # irc.client.Reactor 没有 close_all 方法，需要手动关闭所有连接
+                for conn in list(self.reactor.connections):
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                self.reactor.connections.clear()
             except Exception:
                 pass
             self.reactor = None
@@ -248,9 +254,10 @@ class IRCPlatformAdapter(Platform):
         
         # 强制关闭 socket 以确保连接立即断开
         try:
-            if hasattr(connection, '_sock') and connection._sock:
-                connection._sock.close()
-                connection._sock = None
+            sock = getattr(connection, '_sock', None)
+            if sock is not None:
+                sock.close()
+                # 不直接设置 _sock = None，因为这是内部属性，可能引起类型检查警告
         except Exception:
             pass
         
@@ -299,7 +306,10 @@ class IRCPlatformAdapter(Platform):
     def _run_reactor(self):
         try:
             while not self._reactor_stop_event.is_set():
-                self.reactor.process_once(timeout=1)
+                if self.reactor is not None:
+                    self.reactor.process_once(timeout=1)
+                else:
+                    break
         except Exception as exc:
             logger.error("IRC reactor错误: %s", exc)
             self._submit_coro(self._handle_reactor_error(exc))

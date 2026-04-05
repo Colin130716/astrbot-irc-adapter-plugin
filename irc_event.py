@@ -88,6 +88,12 @@ class IRCEvent(AstrMessageEvent):
         if isinstance(message, str):
             return self._normalize_irc_text(message)
 
+        # 首先尝试直接从常见属性获取文本（包括 Reply 组件的 text 属性）
+        for attr_name in ("message_str", "text", "content", "delta"):
+            value = getattr(message, attr_name, None)
+            if isinstance(value, str) and value.strip():
+                return self._normalize_irc_text(value)
+
         component_type = getattr(message, "type", None)
         if component_type is not None:
             type_name = getattr(component_type, "value", None) or getattr(component_type, "name", None) or str(component_type)
@@ -97,11 +103,7 @@ class IRCEvent(AstrMessageEvent):
                 if nested:
                     return nested
 
-                for attr_name in ("message_str", "text", "content"):
-                    value = getattr(message, attr_name, None)
-                    if isinstance(value, str) and value.strip():
-                        return self._normalize_irc_text(value)
-
+        # 再次尝试从其他属性获取文本
         for attr_name in ("text", "content", "message", "delta"):
             value = getattr(message, attr_name, None)
             if isinstance(value, str) and value.strip():
@@ -124,7 +126,7 @@ class IRCEvent(AstrMessageEvent):
             elif isinstance(component, Image):
                 file_value = getattr(component, "file", None) or getattr(component, "url", None) or getattr(component, "path", None)
                 if file_value and str(file_value).startswith("http"):
-                    parts.append(f"[图片: {file_value}]")
+                    parts.append(f"[图片：{file_value}]")
                 else:
                     parts.append("[图片]")
             else:
